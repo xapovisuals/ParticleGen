@@ -151,6 +151,35 @@
 
         .sidebar-content { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
 
+        /* ── Tooltips ────────────────────────────────────── */
+        .has-tip { position: relative; }
+        .has-tip .tip-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 15px; height: 15px; border-radius: 50%; font-size: 10px;
+            background: rgba(255,255,255,0.06); color: var(--text-muted);
+            cursor: help; margin-left: 4px; flex-shrink: 0;
+            border: 1px solid rgba(255,255,255,0.1); vertical-align: middle;
+            transition: background 0.15s, color 0.15s;
+        }
+        .has-tip .tip-icon:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .has-tip .tip-bubble {
+            display: none; position: absolute; left: 0; top: calc(100% + 6px);
+            width: 260px; padding: 10px 12px; z-index: 30;
+            background: #1e1e24; border: 1px solid rgba(255,255,255,0.12);
+            border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            font-size: 11.5px; line-height: 1.55; color: #c4c4cc;
+            pointer-events: none;
+        }
+        .has-tip .tip-bubble::before {
+            content: ''; position: absolute; top: -5px; left: 14px;
+            width: 8px; height: 8px; background: #1e1e24;
+            border-left: 1px solid rgba(255,255,255,0.12);
+            border-top: 1px solid rgba(255,255,255,0.12);
+            transform: rotate(45deg);
+        }
+        .has-tip:hover .tip-bubble,
+        .has-tip.tip-open .tip-bubble { display: block; pointer-events: auto; }
+
         /* ── Collapsible sections ────────────────────────── */
         .section { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
         .section-header {
@@ -527,44 +556,52 @@
             <div class="section" data-section="emission">
                 <div class="section-header">Emission <span class="section-chevron">&#9660;</span></div>
                 <div class="section-body">
-                    <div class="control-group">
-                        <label>Particles <input type="number" class="value-input" id="val-particles" value="400"></label>
+                    <div class="control-group has-tip">
+                        <label>Particles <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-particles" value="400"></label>
                         <input type="range" id="in-particles" min="10" max="1000" value="400">
+                        <div class="tip-bubble">Total number of particle shapes generated. Higher values create denser effects but increase JSON file size and render time.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Emit Duration (s) <input type="number" class="value-input" id="val-emit" step="0.5" value="3"></label>
+                    <div class="control-group has-tip">
+                        <label>Emit Duration (s) <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-emit" step="0.5" value="3"></label>
                         <input type="range" id="in-emit" min="0" max="8" step="0.5" value="3">
+                        <div class="tip-bubble">Time window over which particles are born. Particles spawn at random times within this window. Longer values create a more continuous stream.</div>
                     </div>
-                    <div class="toggle-row">
-                        <span>Burst Mode</span>
+                    <div class="toggle-row has-tip">
+                        <span>Burst Mode <span class="tip-icon">?</span></span>
                         <button class="toggle" id="tog-burst" data-key="burstMode"></button>
+                        <div class="tip-bubble">All particles spawn at once on frame 0 instead of being spread over the emit duration. Great for explosions and fireworks.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Emitter Shape</label>
+                    <div class="control-group has-tip">
+                        <label>Emitter Shape <span class="tip-icon">?</span></label>
                         <select id="sel-emitter-shape">
                             <option value="point">Point</option>
                             <option value="line">Line</option>
                             <option value="circle">Circle</option>
                             <option value="rectangle">Rectangle</option>
                         </select>
+                        <div class="tip-bubble">The area from which particles spawn. Point emits from center, Line spreads along a horizontal line, Circle fills a disc, Rectangle fills a box.</div>
                     </div>
                     <div class="row" id="emitter-size-row">
-                        <div class="control-group">
-                            <div class="inline-label">Width</div>
+                        <div class="control-group has-tip">
+                            <div class="inline-label">Width <span class="tip-icon">?</span></div>
                             <input type="number" class="value-input" id="val-emitterShapeWidth" value="200" style="width:100%">
+                            <div class="tip-bubble">Width of the emission area. Only applicable to Line and Rectangle emitter shapes.</div>
                         </div>
-                        <div class="control-group">
-                            <div class="inline-label">Height</div>
+                        <div class="control-group has-tip">
+                            <div class="inline-label">Height <span class="tip-icon">?</span></div>
                             <input type="number" class="value-input" id="val-emitterShapeHeight" value="200" style="width:100%">
+                            <div class="tip-bubble">Height of the emission area. Only applicable to the Rectangle emitter shape.</div>
                         </div>
                     </div>
-                    <div class="control-group">
-                        <label>Sweep X (px) <input type="number" class="value-input" id="val-sweepx" step="10" value="100"></label>
+                    <div class="control-group has-tip">
+                        <label>Sweep X (px) <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-sweepx" step="10" value="100"></label>
                         <input type="range" id="in-sweepx" min="-1000" max="1000" step="10" value="100">
+                        <div class="tip-bubble">Moves the emitter origin horizontally over the emit duration. The emitter travels this many pixels left-to-right as it spawns particles.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Sweep Y (px) <input type="number" class="value-input" id="val-sweepy" step="10" value="0"></label>
+                    <div class="control-group has-tip">
+                        <label>Sweep Y (px) <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-sweepy" step="10" value="0"></label>
                         <input type="range" id="in-sweepy" min="-1000" max="1000" step="10" value="0">
+                        <div class="tip-bubble">Moves the emitter origin vertically over the emit duration. Combine with Sweep X to create diagonal or curved emission paths.</div>
                     </div>
                 </div>
             </div>
@@ -573,33 +610,40 @@
             <div class="section" data-section="physics">
                 <div class="section-header">Physics <span class="section-chevron">&#9660;</span></div>
                 <div class="section-body">
-                    <div class="control-group">
-                        <label>Initial Speed <input type="number" class="value-input" id="val-speed" step="0.5" value="0.5"></label>
+                    <div class="control-group has-tip">
+                        <label>Initial Speed <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-speed" step="0.5" value="0.5"></label>
                         <input type="range" id="in-speed" min="0.5" max="30" step="0.5" value="0.5">
+                        <div class="tip-bubble">Starting velocity of each particle in pixels per frame. Particles launch outward from the emitter in a random direction at this speed.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Drag <input type="number" class="value-input" id="val-drag" step="0.005" value="0.97"></label>
+                    <div class="control-group has-tip">
+                        <label>Drag <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-drag" step="0.005" value="0.97"></label>
                         <input type="range" id="in-drag" min="0.9" max="1.0" step="0.005" value="0.97">
+                        <div class="tip-bubble">How much speed each particle retains per frame. 1.0 = no drag (constant speed), 0.90 = heavy drag (particles stop quickly). Lower values make particles feel snappier.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Turbulence <input type="number" class="value-input" id="val-turbulence" step="0.5" value="6.5"></label>
+                    <div class="control-group has-tip">
+                        <label>Turbulence <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-turbulence" step="0.5" value="6.5"></label>
                         <input type="range" id="in-turbulence" min="0" max="30" step="0.5" value="6.5">
+                        <div class="tip-bubble">Strength of pseudo-random noise added to each particle's movement. Creates organic, shimmering motion. Higher values make particles wiggle more wildly.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Velocity Randomness (%) <input type="number" class="value-input" id="val-velrand" step="1" value="50"></label>
+                    <div class="control-group has-tip">
+                        <label>Velocity Randomness (%) <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-velrand" step="1" value="50"></label>
                         <input type="range" id="in-velrand" min="0" max="100" step="1" value="50">
+                        <div class="tip-bubble">How much each particle's initial speed varies from the base speed. 0% = all particles move at the same speed. 100% = speeds range from near-zero to double.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Wind X <input type="number" class="value-input" id="val-windx" step="0.5" value="-12"></label>
+                    <div class="control-group has-tip">
+                        <label>Wind X <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-windx" step="0.5" value="-12"></label>
                         <input type="range" id="in-windx" min="-20" max="20" step="0.5" value="-12">
+                        <div class="tip-bubble">Constant horizontal force applied to all particles every frame. Negative = blows left, positive = blows right. Stacks with particle velocity.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Wind Y <input type="number" class="value-input" id="val-windy" step="0.5" value="0"></label>
+                    <div class="control-group has-tip">
+                        <label>Wind Y <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-windy" step="0.5" value="0"></label>
                         <input type="range" id="in-windy" min="-20" max="20" step="0.5" value="0">
+                        <div class="tip-bubble">Constant vertical force applied every frame. Negative = blows upward, positive = blows downward. Unlike gravity, wind force is constant (doesn't accelerate).</div>
                     </div>
-                    <div class="control-group">
-                        <label>Gravity <input type="number" class="value-input" id="val-gravity" step="0.5" value="0"></label>
+                    <div class="control-group has-tip">
+                        <label>Gravity <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-gravity" step="0.5" value="0"></label>
                         <input type="range" id="in-gravity" min="-20" max="20" step="0.5" value="0">
+                        <div class="tip-bubble">Accelerating vertical force. Unlike wind, gravity compounds over time so particles fall faster and faster. Positive = downward, negative = upward (buoyancy).</div>
                     </div>
                 </div>
             </div>
@@ -608,44 +652,50 @@
             <div class="section" data-section="appearance">
                 <div class="section-header">Appearance <span class="section-chevron">&#9660;</span></div>
                 <div class="section-body">
-                    <div class="control-group">
-                        <label>Particle Shape</label>
+                    <div class="control-group has-tip">
+                        <label>Particle Shape <span class="tip-icon">?</span></label>
                         <select id="sel-particle-shape">
                             <option value="circle">Circle</option>
                             <option value="square">Square</option>
                             <option value="triangle">Triangle</option>
                             <option value="star">Star</option>
                         </select>
+                        <div class="tip-bubble">The geometry of each particle. Circle and Square use Lottie ellipse/rect shapes. Triangle and Star use polystar paths. Rotation is only visible on non-circle shapes.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Size <input type="number" class="value-input" id="val-size" step="1" value="4"></label>
+                    <div class="control-group has-tip">
+                        <label>Size <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-size" step="1" value="4"></label>
                         <input type="range" id="in-size" min="1" max="100" value="4">
+                        <div class="tip-bubble">Maximum diameter of each particle in pixels. Actual size varies randomly between 20% and 100% of this value for natural variation.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Size Over Lifetime</label>
+                    <div class="control-group has-tip">
+                        <label>Size Over Lifetime <span class="tip-icon">?</span></label>
                         <select id="sel-size-lifetime">
                             <option value="none">Default (fade in/out)</option>
                             <option value="grow">Grow</option>
                             <option value="shrink">Shrink</option>
                             <option value="pulse">Pulse</option>
                         </select>
+                        <div class="tip-bubble">How particle scale changes over its life. Default fades in/out smoothly. Grow starts small and expands. Shrink starts full and reduces. Pulse oscillates between large and small.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Particle Life (s) <input type="number" class="value-input" id="val-life" step="0.5" value="2"></label>
+                    <div class="control-group has-tip">
+                        <label>Particle Life (s) <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-life" step="0.5" value="2"></label>
                         <input type="range" id="in-life" min="0.5" max="10" step="0.5" value="2">
+                        <div class="tip-bubble">Maximum lifetime of each particle in seconds. Actual life varies between 40% and 100% of this value. Longer life means particles travel farther before fading out.</div>
                     </div>
                     <div class="row">
-                        <div class="control-group">
-                            <label>Spin Min (&deg;/s) <input type="number" class="value-input" id="val-spinMin" step="10" value="0"></label>
+                        <div class="control-group has-tip">
+                            <label>Spin Min (&deg;/s) <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-spinMin" step="10" value="0"></label>
                             <input type="range" id="in-spinMin" min="-720" max="720" step="10" value="0">
+                            <div class="tip-bubble">Minimum rotation speed in degrees per second. Each particle gets a random spin between Min and Max. Negative = counter-clockwise. Only visible on non-circle shapes.</div>
                         </div>
-                        <div class="control-group">
-                            <label>Spin Max <input type="number" class="value-input" id="val-spinMax" step="10" value="0"></label>
+                        <div class="control-group has-tip">
+                            <label>Spin Max <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-spinMax" step="10" value="0"></label>
                             <input type="range" id="in-spinMax" min="-720" max="720" step="10" value="0">
+                            <div class="tip-bubble">Maximum rotation speed. Set both Min and Max to 0 for no rotation. Try -360 to 360 for confetti-like tumbling.</div>
                         </div>
                     </div>
-                    <div class="control-group">
-                        <label>Particle Colors</label>
+                    <div class="control-group has-tip">
+                        <label>Particle Colors <span class="tip-icon">?</span></label>
                         <div class="color-row" id="in-colors">
                             <input type="color" value="#ffffff">
                             <input type="color" value="#ffeb3b">
@@ -656,6 +706,7 @@
                             <button class="color-btn" id="btn-add-color" title="Add color">+</button>
                             <button class="color-btn" id="btn-remove-color" title="Remove color">&minus;</button>
                         </div>
+                        <div class="tip-bubble">Each particle is randomly assigned one of these colors. Use + / &minus; to add or remove swatches. Click a swatch to change its color.</div>
                     </div>
                 </div>
             </div>
@@ -664,8 +715,8 @@
             <div class="section" data-section="canvas">
                 <div class="section-header">Canvas &amp; Animation <span class="section-chevron">&#9660;</span></div>
                 <div class="section-body">
-                    <div class="control-group">
-                        <label>Canvas Size</label>
+                    <div class="control-group has-tip">
+                        <label>Canvas Size <span class="tip-icon">?</span></label>
                         <select id="sel-canvas">
                             <option value="1920x1080">1920 x 1080 (HD Landscape)</option>
                             <option value="1080x1920">1080 x 1920 (Portrait)</option>
@@ -673,36 +724,43 @@
                             <option value="3840x2160">3840 x 2160 (4K)</option>
                             <option value="custom">Custom</option>
                         </select>
+                        <div class="tip-bubble">Resolution of the Lottie animation in pixels. Particles spawn from center of this canvas. Choose a size that matches your target composition.</div>
                     </div>
                     <div class="row" id="custom-canvas-row" style="display:none;">
-                        <div class="control-group">
-                            <div class="inline-label">Width</div>
+                        <div class="control-group has-tip">
+                            <div class="inline-label">Width <span class="tip-icon">?</span></div>
                             <input type="number" class="value-input" id="val-canvasW" value="1920" style="width:100%">
+                            <div class="tip-bubble">Custom width of the Lottie export canvas in pixels.</div>
                         </div>
-                        <div class="control-group">
-                            <div class="inline-label">Height</div>
+                        <div class="control-group has-tip">
+                            <div class="inline-label">Height <span class="tip-icon">?</span></div>
                             <input type="number" class="value-input" id="val-canvasH" value="1080" style="width:100%">
+                            <div class="tip-bubble">Custom height of the Lottie export canvas in pixels.</div>
                         </div>
                     </div>
-                    <div class="control-group">
-                        <label>FPS</label>
+                    <div class="control-group has-tip">
+                        <label>FPS <span class="tip-icon">?</span></label>
                         <div class="row">
                             <button class="btn btn-secondary fps-btn" data-fps="24">24</button>
                             <button class="btn btn-secondary fps-btn active" data-fps="30">30</button>
                             <button class="btn btn-secondary fps-btn" data-fps="60">60</button>
                         </div>
+                        <div class="tip-bubble">Frames per second of the output animation. Physics are normalized so the visual result stays consistent across frame rates. 24 for film, 30 for web, 60 for smooth playback.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Duration (s) <input type="number" class="value-input" id="val-duration" step="1" value="8"></label>
+                    <div class="control-group has-tip">
+                        <label>Duration (s) <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-duration" step="1" value="8"></label>
                         <input type="range" id="in-duration" min="1" max="60" step="1" value="8">
+                        <div class="tip-bubble">Total length of the animation in seconds. Particles that would extend past this time are cut short. Longer durations produce larger JSON files.</div>
                     </div>
-                    <div class="control-group">
-                        <label>Keyframe Sample Rate <input type="number" class="value-input" id="val-keyframeSample" step="1" value="3"></label>
+                    <div class="control-group has-tip">
+                        <label>Keyframe Sample Rate <span class="tip-icon">?</span> <input type="number" class="value-input" id="val-keyframeSample" step="1" value="3"></label>
                         <input type="range" id="in-keyframeSample" min="1" max="10" step="1" value="3">
+                        <div class="tip-bubble">Position is recorded every Nth frame with linear interpolation between samples. 1 = every frame (largest file, exact path). 3 = every 3rd frame (66% smaller). Higher values reduce file size but may lose fine detail.</div>
                     </div>
-                    <div class="toggle-row">
-                        <span>Seamless Loop</span>
+                    <div class="toggle-row has-tip">
+                        <span>Seamless Loop <span class="tip-icon">?</span></span>
                         <button class="toggle" id="tog-loop" data-key="loopingMode"></button>
+                        <div class="tip-bubble">Distributes particle births evenly across the entire duration so the animation loops smoothly with no visible gap. Overrides emit duration. Best for looping backgrounds.</div>
                     </div>
                 </div>
             </div>
@@ -783,6 +841,35 @@
            ═══════════════════════════════════════════════════ */
         document.querySelectorAll('.toggle').forEach(function (btn) {
             btn.addEventListener('click', function () { btn.classList.toggle('on'); });
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Tooltip interactions
+           ═══════════════════════════════════════════════════ */
+        document.querySelectorAll('.has-tip .tip-icon').forEach(function(icon) {
+            icon.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var parent = icon.closest('.has-tip');
+                var isOpen = parent.classList.contains('tip-open');
+                
+                // close all
+                document.querySelectorAll('.has-tip').forEach(function(tip) {
+                    tip.classList.remove('tip-open');
+                });
+                
+                // toggle
+                if (!isOpen) {
+                    parent.classList.add('tip-open');
+                }
+            });
+        });
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.tip-bubble') && !e.target.closest('.tip-icon')) {
+                document.querySelectorAll('.has-tip').forEach(function(tip) {
+                    tip.classList.remove('tip-open');
+                });
+            }
         });
 
         /* ═══════════════════════════════════════════════════

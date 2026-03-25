@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node generate_lottie.js --help)",
+      "Bash(node generate_lottie.js -o /tmp/test_particles.json)"
+    ]
+  }
+}
