@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lottie Particle Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090b;
+            --bg-light: #e8e8ec;
+            --panel: rgba(24, 24, 27, 0.4);
+            --border: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(255, 255, 255, 0.15);
+            --text: #f8fafc;
+            --text-muted: #a1a1aa;
+            --accent: #818cf8;
+            --accent-glow: rgba(129, 140, 248, 0.4);
+            --danger: #ef4444;
+            --radius-lg: 24px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --sidebar-w: 360px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', system-ui, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ── Loading overlay ─────────────────────────────── */
+        #loading-overlay {
+            position: fixed; inset: 0; z-index: 100;
+            background: rgba(0,0,0,0.7);
+            display: none; justify-content: center; align-items: center;
+            flex-direction: column; gap: 16px;
+        }
+        #loading-overlay.visible { display: flex; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #loading-text { font-size: 14px; color: var(--text-muted); }
+
+        /* ── Preview area ────────────────────────────────── */
+        #preview-area {
+            flex: 1; display: flex; flex-direction: column;
+            position: relative; min-width: 0;
+        }
+        #lottie-container {
+            flex: 1; display: flex; justify-content: center; align-items: center;
+            position: relative; overflow: hidden;
+            transition: background 0.3s;
+        }
+        #lottie-container.bg-dark { background: var(--bg); }
+        #lottie-container.bg-light { background: var(--bg-light); }
+        #lottie-container.bg-checker {
+            background-image:
+                linear-gradient(45deg, #ccc 25%, transparent 25%),
+                linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #ccc 75%),
+                linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+        }
+        #lottie { width: 100%; height: 100%; }
+
+        /* BG toggle + sidebar toggle */
+        .top-controls {
+            position: absolute; top: 12px; right: 16px; z-index: 15;
+            display: flex; gap: 8px;
+        }
+        .icon-btn {
+            width: 36px; height: 36px; border-radius: var(--radius-sm);
+            background: rgba(0,0,0,0.5); border: 1px solid var(--border);
+            color: var(--text); cursor: pointer; display: flex;
+            align-items: center; justify-content: center; font-size: 16px;
+            transition: background 0.2s;
+        }
+        .icon-btn:hover { background: rgba(255,255,255,0.1); }
+        #btn-toggle-sidebar {
+            position: absolute; top: 12px; left: 16px; z-index: 15;
+        }
+
+        /* ── Playback bar ────────────────────────────────── */
+        #playback-bar {
+            height: 48px; display: flex; align-items: center; gap: 10px;
+            padding: 0 16px; background: rgba(24,24,27,0.6);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        #playback-bar button {
+            background: none; border: 1px solid var(--border); color: var(--text);
+            width: 32px; height: 32px; border-radius: var(--radius-sm);
+            cursor: pointer; font-size: 14px; display: flex;
+            align-items: center; justify-content: center;
+            transition: background 0.15s;
+        }
+        #playback-bar button:hover { background: rgba(255,255,255,0.08); }
+        #scrubber {
+            flex: 1; -webkit-appearance: none; height: 3px;
+            background: rgba(255,255,255,0.15); border-radius: 2px; outline: none;
+        }
+        #scrubber::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+            background: #fff; border: 2px solid var(--accent); cursor: pointer;
+        }
+        #frame-display { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 80px; text-align: right; }
+        #speed-select {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+            color: var(--text); border-radius: var(--radius-sm); padding: 4px 6px;
+            font-size: 12px; outline: none; cursor: pointer;
+        }
+
+        /* ── Sidebar ─────────────────────────────────────── */
+        #sidebar {
+            width: var(--sidebar-w); min-width: var(--sidebar-w);
+            background: var(--panel);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            overflow-y: auto; overflow-x: hidden;
+            transition: margin-left 0.3s ease;
+            z-index: 20; flex-shrink: 0;
+        }
+        #sidebar.collapsed { margin-left: calc(-1 * var(--sidebar-w)); }
+        #sidebar::-webkit-scrollbar { width: 4px; }
+        #sidebar::-webkit-scrollbar-track { background: transparent; }
+        #sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+        .sidebar-header {
+            padding: 20px 20px 12px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .sidebar-header h2 {
+            font-size: 18px; font-weight: 600; letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff, #a1a1aa);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .sidebar-content { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+
+        /* ── Collapsible sections ────────────────────────── */
+        .section { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+        .section-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; cursor: pointer; user-select: none;
+            background: rgba(0,0,0,0.2); font-size: 13px; font-weight: 600;
+            color: #cbd5e1; transition: background 0.15s;
+        }
+        .section-header:hover { background: rgba(0,0,0,0.3); }
+        .section-chevron {
+            transition: transform 0.2s; font-size: 10px; color: var(--text-muted);
+        }
+        .section.collapsed .section-chevron { transform: rotate(-90deg); }
+        .section-body {
+            padding: 12px 14px; display: flex; flex-direction: column; gap: 12px;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+            max-height: 800px; overflow: hidden;
+        }
+        .section.collapsed .section-body { max-height: 0; padding-top: 0; padding-bottom: 0; }
+
+        /* ── Controls ────────────────────────────────────── */
+        .control-group { display: flex; flex-direction: column; gap: 6px; }
+        .control-group label {
+            font-size: 12px; color: var(--text-muted); font-weight: 500;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .value-input {
+            width: 54px; background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            color: var(--accent); font-size: 12px; font-weight: 600;
+            font-variant-numeric: tabular-nums; text-align: right;
+            padding: 3px 6px; outline: none; transition: all 0.2s;
+        }
+        .value-input:focus { border-color: var(--accent); background: rgba(129,140,248,0.1); }
+        .value-input::-webkit-outer-spin-button,
+        .value-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none; width: 100%; height: 3px;
+            background: rgba(255,255,255,0.1); border-radius: 2px; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%;
+            background: #fff; border: 2px solid var(--accent); cursor: pointer;
+            box-shadow: 0 0 6px var(--accent-glow);
+        }
+
+        select, .control-select {
+            width: 100%; padding: 7px 10px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+            color: var(--text); border-radius: var(--radius-sm);
+            font-family: inherit; font-size: 12px; outline: none; cursor: pointer;
+        }
+        select:focus { border-color: var(--accent); }
+
+        .row { display: flex; gap: 8px; align-items: center; }
+        .row > * { flex: 1; }
+
+        .inline-label { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+
+        /* ── Color inputs ────────────────────────────────── */
+        .color-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .color-row input[type="color"] {
+            width: 28px; height: 28px; padding: 0; border: 1px solid var(--border);
+            border-radius: 6px; cursor: pointer; background: none;
+        }
+        .color-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+        .color-row input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+        .color-btn {
+            width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; font-weight: 400; line-height: 1;
+            background: rgba(255,255,255,0.04); border: 1px dashed var(--border);
+            color: var(--text-muted); transition: background 0.15s;
+        }
+        .color-btn:hover { background: rgba(255,255,255,0.08); }
+
+        /* ── Preset area ─────────────────────────────────── */
+        .preset-row { display: flex; gap: 6px; }
+        .preset-row select { flex: 1; }
+        .preset-row .icon-btn { width: 32px; height: 32px; flex-shrink: 0; font-size: 13px; }
+        .preset-save-row { display: flex; gap: 6px; }
+        .preset-save-row input { flex: 1; padding: 7px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); font-family: inherit; font-size: 12px; outline: none; }
+        .preset-save-row button { padding: 7px 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-weight: 500; }
+        .preset-save-row button:hover { background: rgba(255,255,255,0.1); }
+
+        /* ── Toggle switch ───────────────────────────────── */
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; }
+        .toggle-row span { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+        .toggle {
+            width: 36px; height: 20px; border-radius: 10px; cursor: pointer;
+            background: rgba(255,255,255,0.1); position: relative; border: none;
+            transition: background 0.2s;
+        }
+        .toggle::after {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 14px; height: 14px; border-radius: 50%; background: #fff;
+            transition: transform 0.2s;
+        }
+        .toggle.on { background: var(--accent); }
+        .toggle.on::after { transform: translateX(16px); }
+
+        /* ── Action buttons ──────────────────────────────── */
+        .actions { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); margin-top: auto; }
+        .actions .btn-row { display: flex; gap: 8px; }
+        .btn {
+            flex: 1; padding: 10px; border: none; border-radius: var(--radius-md);
+            font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; font-family: inherit;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #6366f1);
+            color: #fff; box-shadow: 0 6px 12px var(--accent-glow);
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 16px var(--accent-glow); }
+        .btn-secondary { background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.08); }
+        .btn-icon { width: 38px; flex: 0 0 38px; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+
+        .notice { font-size: 11px; color: var(--text-muted); text-align: center; opacity: 0.5; padding: 0 16px 12px; }
+
+        /* ── Keyboard shortcut hint ──────────────────────── */
+        #shortcut-overlay {
+            position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.75);
+            display: none; justify-content: center; align-items: center;
+        }
+        #shortcut-overlay.visible { display: flex; }
+        .shortcut-card {
+            background: #18181b; border: 1px solid var(--border); border-radius: var(--radius-lg);
+            padding: 28px 36px; max-width: 380px; width: 100%;
+        }
+        .shortcut-card h3 { margin-bottom: 16px; font-size: 16px; }
+        .shortcut-card table { width: 100%; }
+        .shortcut-card td { padding: 4px 0; font-size: 13px; }
+        .shortcut-card td:first-child { color: var(--text-muted); }
+        .shortcut-card kbd {
+            background: rgba(255,255,255,0.08); padding: 2px 7px; border-radius: 4px;
+            font-family: inherit; font-size: 12px; border: 1px solid var(--border);
+        }
+
+        /* ── Responsive ──────────────────────────────────── */
+        @media (max-width: 768px) {
+            #sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 50; border-right: 1px solid var(--border); }
+            #sidebar.collapsed { margin-left: calc(-1 * var(--sidebar-w)); }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+    <script>
+    /**
+     * Particle Engine — inlined for file:// compatibility.
+     * Canonical copy lives in particle_engine.js (used by CLI).
+     */
+    (function (exports) {
+      'use strict';
+
+      var DEFAULT_CONFIG = {
+        particles: 400, turbulence: 6.5, speed: 0.5, size: 4, windx: -12, windy: 0,
+        gravity: 0, life: 2, emit: 3, velrand: 50, sweepx: 100, sweepy: 0, duration: 8, drag: 0.97,
+        fps: 30, canvasWidth: 1920, canvasHeight: 1080, burstMode: false, loopingMode: false,
+        emitterShape: 'point', emitterShapeWidth: 200, emitterShapeHeight: 200,
+        particleShape: 'circle', sizeOverLifetime: 'none', spinMin: 0, spinMax: 0,
+        keyframeSample: 3,
+        colors: [[1,1,1,1],[1,0.92,0.23,1],[1,0.76,0.03,1],[1,0.88,0.51,1],[0.51,0.83,0.98,1],[0.88,0.75,0.91,1]]
+      };
+
+      function getSpawnPosition(config, emitProgress) {
+        var cx = config.canvasWidth / 2, cy = config.canvasHeight / 2;
+        var sweepOffX = 0, sweepOffY = 0;
+        if (config.emit > 0 && !config.burstMode) {
+          if (config.sweepx) sweepOffX = emitProgress * config.sweepx - config.sweepx / 2;
+          if (config.sweepy) sweepOffY = emitProgress * config.sweepy - config.sweepy / 2;
+        }
+        var x, y, a, r;
+        switch (config.emitterShape) {
+          case 'line':
+            x = cx + sweepOffX + (Math.random() - 0.5) * config.emitterShapeWidth; y = cy + sweepOffY; break;
+          case 'circle':
+            a = Math.random() * Math.PI * 2; r = Math.sqrt(Math.random()) * (config.emitterShapeWidth / 2);
+            x = cx + sweepOffX + Math.cos(a) * r; y = cy + sweepOffY + Math.sin(a) * r; break;
+          case 'rectangle':
+            x = cx + sweepOffX + (Math.random() - 0.5) * config.emitterShapeWidth;
+            y = cy + sweepOffY + (Math.random() - 0.5) * config.emitterShapeHeight; break;
+          default:
+            x = cx + sweepOffX + (Math.random() * 40 - 20); y = cy + sweepOffY + (Math.random() * 40 - 20); break;
+        }
+        return [x, y];
+      }
+
+      function createShapeItem(type, size) {
+        switch (type) {
+          case 'square': return { ty:'rc',d:1,p:{a:0,k:[0,0],ix:3},s:{a:0,k:[size,size],ix:2},r:{a:0,k:0,ix:7},nm:'Rectangle Path 1',mn:'ADBE Vector Shape - Rect' };
+          case 'triangle': return { ty:'sr',d:1,sy:2,p:{a:0,k:[0,0],ix:3},or:{a:0,k:size/2,ix:4},os:{a:0,k:0,ix:5},pt:{a:0,k:3,ix:6},r:{a:0,k:0,ix:7},nm:'Triangle Path 1',mn:'ADBE Vector Shape - Star' };
+          case 'star': return { ty:'sr',d:1,sy:1,p:{a:0,k:[0,0],ix:3},or:{a:0,k:size/2,ix:4},os:{a:0,k:0,ix:5},ir:{a:0,k:size*0.2,ix:6},is:{a:0,k:0,ix:7},pt:{a:0,k:5,ix:8},r:{a:0,k:0,ix:9},nm:'Star Path 1',mn:'ADBE Vector Shape - Star' };
+          default: return { ty:'el',d:1,p:{a:0,k:[0,0],ix:3},s:{a:0,k:[size,size],ix:2},nm:'Ellipse Path 1',mn:'ADBE Vector Shape - Ellipse' };
+        }
+      }
+
+      function buildScaleKeys(start, end, life, preset) {
+        var m1, m2, m3;
+        switch (preset) {
+          case 'grow': return [
+            {t:start,s:[30,30,100],e:[100,100,100],i:{x:[0.833],y:[0.833]},o:{x:[0.167],y:[0.167]}},
+            {t:end,s:[100,100,100]}];
+          case 'shrink': return [
+            {t:start,s:[100,100,100],e:[20,20,100],i:{x:[0.833],y:[0.833]},o:{x:[0.167],y:[0.167]}},
+            {t:end,s:[20,20,100]}];
+          case 'pulse':
+            m1=start+Math.floor(life*0.25); m2=start+Math.floor(life*0.5); m3=start+Math.floor(life*0.75);
+            return [
+              {t:start,s:[0,0,100],e:[120,120,100],i:{x:[0.833],y:[0.833]},o:{x:[0.167],y:[0.167]}},
+              {t:m1,s:[120,120,100],e:[60,60,100],i:{x:[0.833],y:[0.833]},o:{x:[0.167],y:[0.167]}},
+              {t:m2,s:[60,60,100],e:[120,120,100],i:{x:[0.833],y:[0.833]},o:{x:[0.167],y:[0.167]}},
+              {t:m3,s:[120,120,100],e:[0,0,100],i:{x:[0.833],y:[0.833]},o:{x:[0.167],y:[0.167]}},
+              {t:end,s:[0,0,100]}];
+          default: return [
+            {t:start,s:[0,0,100],e:[100,100,100],i:{x:[1],y:[1]},o:{x:[0],y:[0]}},
+            {t:start+Math.min(15,Math.floor(life*0.15)),s:[100,100,100],e:[100,100,100],i:{x:[1],y:[1]},o:{x:[0],y:[0]}},
+            {t:end-Math.min(15,Math.floor(life*0.2)),s:[100,100,100],e:[0,0,100],i:{x:[1],y:[1]},o:{x:[0],y:[0]}},
+            {t:end,s:[0,0,100]}];
+        }
+      }
+
+      function buildLottieJSON(userConfig) {
+        var config = {}, key;
+        for (key in DEFAULT_CONFIG) config[key] = userConfig && userConfig[key] !== undefined ? userConfig[key] : DEFAULT_CONFIG[key];
+
+        var width = config.canvasWidth, height = config.canvasHeight, fps = config.fps;
+        var frames = Math.floor(fps * config.duration);
+        var numParticles = Math.max(1, Math.floor(config.particles));
+        var fpsNorm = 30 / fps;
+        var sampleRate = Math.max(1, Math.floor(config.keyframeSample));
+        var layers = [];
+
+        for (var i = 0; i < numParticles; i++) {
+          var angle = Math.random() * Math.PI * 2;
+          var randomFactor = (Math.random() * 2 - 1) * (config.velrand / 100);
+          var initialSpeed = Math.max(0.1, config.speed * (1 + randomFactor));
+
+          var start_time, life_time;
+          if (config.loopingMode) {
+            start_time = Math.floor((i / numParticles) * frames);
+            var maxLife = Math.floor(config.life * fps);
+            life_time = Math.floor(maxLife * 0.6 + Math.random() * maxLife * 0.4);
+            if (start_time + life_time > frames) life_time = frames - start_time;
+          } else if (config.burstMode) {
+            start_time = 0;
+            life_time = Math.floor(config.life * 0.4 * fps + Math.random() * config.life * 0.6 * fps);
+          } else {
+            start_time = Math.floor(Math.random() * (fps * config.emit));
+            life_time = Math.floor(config.life * 0.4 * fps + Math.random() * config.life * 0.6 * fps);
+          }
+
+          var end_time = Math.min(start_time + life_time, frames);
+          life_time = end_time - start_time;
+          if (life_time < 2) continue;
+
+          var color = config.colors[Math.floor(Math.random() * config.colors.length)];
+          var size = config.size * 0.2 + Math.random() * config.size;
+          var emitProgress = !config.burstMode && config.emit > 0 && start_time > 0 ? start_time / (fps * config.emit) : 0;
+          var spawn = getSpawnPosition(config, emitProgress);
+          var curr_x = spawn[0], curr_y = spawn[1];
+
+          var noise_offset_x = Math.random() * 1000, noise_offset_y = Math.random() * 1000;
+          var freq1 = 0.1 + Math.random() * 0.15, freq2 = 0.1 + Math.random() * 0.15;
+          var current_gravity = 0, pos_keyframes = [];
+
+          for (var f = start_time; f <= end_time; f++) {
+            var timeOffset = f - start_time;
+            var turb_x = (Math.sin(timeOffset*freq1+noise_offset_x)+Math.cos(timeOffset*freq2+noise_offset_y))*config.turbulence;
+            var turb_y = (Math.cos(timeOffset*freq1+noise_offset_x)+Math.sin(timeOffset*freq2+noise_offset_y))*config.turbulence;
+            var currentSpeed = initialSpeed * Math.pow(config.drag, timeOffset * fpsNorm);
+            current_gravity += config.gravity * 0.05 * fpsNorm;
+            curr_x += Math.cos(angle)*currentSpeed + turb_x + config.windx;
+            curr_y += Math.sin(angle)*currentSpeed + turb_y + config.windy + current_gravity;
+            if (f === start_time || f === end_time || (f - start_time) % sampleRate === 0)
+              pos_keyframes.push({ t: f, s: [curr_x, curr_y, 0] });
+          }
+
+          var posKeys;
+          if (sampleRate <= 1) {
+            posKeys = pos_keyframes.map(function(k){ return {t:k.t,s:k.s,h:1}; });
+          } else {
+            posKeys = pos_keyframes.map(function(k,idx){
+              if (idx===pos_keyframes.length-1) return {t:k.t,s:k.s};
+              return {t:k.t,s:k.s,e:pos_keyframes[idx+1].s,i:{x:[1],y:[1]},o:{x:[0],y:[0]}};
+            });
+          }
+
+          var scaleKeys = buildScaleKeys(start_time, end_time, life_time, config.sizeOverLifetime);
+          var fadeIn = Math.min(10, Math.floor(life_time*0.15)), fadeOut = Math.min(15, Math.floor(life_time*0.2));
+          var opacityKeys = [
+            {t:start_time,s:[0],e:[100],i:{x:[1],y:[1]},o:{x:[0],y:[0]}},
+            {t:start_time+fadeIn,s:[100],e:[100],i:{x:[1],y:[1]},o:{x:[0],y:[0]}},
+            {t:end_time-fadeOut,s:[100],e:[0],i:{x:[1],y:[1]},o:{x:[0],y:[0]}},
+            {t:end_time,s:[0]}
+          ];
+
+          var rotationProp;
+          var spinRate = config.spinMin + Math.random()*(config.spinMax-config.spinMin);
+          if (spinRate !== 0) {
+            var totalRotation = spinRate*(life_time/fps);
+            rotationProp = {a:1,k:[{t:start_time,s:[0],e:[totalRotation],i:{x:[1],y:[1]},o:{x:[0],y:[0]}},{t:end_time,s:[totalRotation]}],ix:10};
+          } else {
+            rotationProp = {a:0,k:0,ix:10};
+          }
+
+          var shapeItem = createShapeItem(config.particleShape, size);
+          layers.push({
+            ty:4,nm:'Particle_'+i,sr:1,st:start_time,op:end_time,ip:start_time,ind:i+1,
+            ks:{o:{a:1,k:opacityKeys,ix:11},r:rotationProp,p:{a:1,k:posKeys,ix:2},a:{a:0,k:[0,0,0],ix:1},s:{a:1,k:scaleKeys,ix:6}},
+            shapes:[{ty:'gr',it:[shapeItem,{ty:'fl',c:{a:0,k:color,ix:4},o:{a:0,k:100,ix:5},r:1,nm:'Fill 1',mn:'ADBE Vector Graphic - Fill'},{ty:'tr',p:{a:0,k:[0,0],ix:2},a:{a:0,k:[0,0],ix:1},s:{a:0,k:[100,100],ix:3},r:{a:0,k:0,ix:6},o:{a:0,k:100,ix:7},sk:{a:0,k:0,ix:4},sa:{a:0,k:0,ix:5},nm:'Transform'}],nm:'Shape Group',np:3,cix:2,ix:1,mn:'ADBE Vector Group'}],
+            ao:0
+          });
+        }
+
+        return {v:'5.7.4',fr:fps,ip:0,op:frames,w:width,h:height,nm:'Turbulent Particle Emitter',ddd:0,assets:[],layers:layers};
+      }
+
+      exports.buildLottieJSON = buildLottieJSON;
+      exports.DEFAULT_CONFIG = DEFAULT_CONFIG;
+    })(window.ParticleEngine = {});
+    </script>
+</head>
+
+<body>
+
+    <!-- Loading overlay -->
+    <div id="loading-overlay"><div class="spinner"></div><div id="loading-text">Generating...</div></div>
+
+    <!-- Keyboard shortcuts overlay -->
+    <div id="shortcut-overlay">
+        <div class="shortcut-card">
+            <h3>Keyboard Shortcuts</h3>
+            <table>
+                <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
+                <tr><td><kbd>Enter</kbd></td><td>Regenerate</td></tr>
+                <tr><td><kbd>Ctrl/Cmd+S</kbd></td><td>Download JSON</td></tr>
+                <tr><td><kbd>Ctrl/Cmd+Z</kbd></td><td>Undo</td></tr>
+                <tr><td><kbd>Ctrl/Cmd+Shift+Z</kbd></td><td>Redo</td></tr>
+                <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Frame step</td></tr>
+                <tr><td><kbd>?</kbd></td><td>Toggle this help</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h2>Particle Controls</h2>
+        </div>
+        <div class="sidebar-content">
+
+            <!-- Presets -->
+            <div class="section" data-section="presets">
+                <div class="section-header">Presets <span class="section-chevron">&#9660;</span></div>
+                <div class="section-body">
+                    <div class="preset-row">
+                        <select id="sel-preset"><option value="">-- Load Preset --</option></select>
+                        <button class="icon-btn" id="btn-delete-preset" title="Delete preset">&#128465;</button>
+                    </div>
+                    <div class="preset-save-row">
+                        <input type="text" id="in-preset-name" placeholder="Preset name...">
+                        <button id="btn-save-preset">Save</button>
+                    </div>
+                    <div class="preset-save-row">
+                        <button id="btn-export-presets" style="flex:1">Export All Presets</button>
+                        <button id="btn-import-presets" style="flex:1">Import Presets</button>
+                    </div>
+                    <input type="file" id="file-import-presets" accept=".json" style="display:none">
+                </div>
+            </div>
+
+            <!-- Emission -->
+            <div class="section" data-section="emission">
+                <div class="section-header">Emission <span class="section-chevron">&#9660;</span></div>
+                <div class="section-body">
+                    <div class="control-group">
+                        <label>Particles <input type="number" class="value-input" id="val-particles" value="400"></label>
+                        <input type="range" id="in-particles" min="10" max="1000" value="400">
+                    </div>
+                    <div class="control-group">
+                        <label>Emit Duration (s) <input type="number" class="value-input" id="val-emit" step="0.5" value="3"></label>
+                        <input type="range" id="in-emit" min="0" max="8" step="0.5" value="3">
+                    </div>
+                    <div class="toggle-row">
+                        <span>Burst Mode</span>
+                        <button class="toggle" id="tog-burst" data-key="burstMode"></button>
+                    </div>
+                    <div class="control-group">
+                        <label>Emitter Shape</label>
+                        <select id="sel-emitter-shape">
+                            <option value="point">Point</option>
+                            <option value="line">Line</option>
+                            <option value="circle">Circle</option>
+                            <option value="rectangle">Rectangle</option>
+                        </select>
+                    </div>
+                    <div class="row" id="emitter-size-row">
+                        <div class="control-group">
+                            <div class="inline-label">Width</div>
+                            <input type="number" class="value-input" id="val-emitterShapeWidth" value="200" style="width:100%">
+                        </div>
+                        <div class="control-group">
+                            <div class="inline-label">Height</div>
+                            <input type="number" class="value-input" id="val-emitterShapeHeight" value="200" style="width:100%">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>Sweep X (px) <input type="number" class="value-input" id="val-sweepx" step="10" value="100"></label>
+                        <input type="range" id="in-sweepx" min="-1000" max="1000" step="10" value="100">
+                    </div>
+                    <div class="control-group">
+                        <label>Sweep Y (px) <input type="number" class="value-input" id="val-sweepy" step="10" value="0"></label>
+                        <input type="range" id="in-sweepy" min="-1000" max="1000" step="10" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Physics -->
+            <div class="section" data-section="physics">
+                <div class="section-header">Physics <span class="section-chevron">&#9660;</span></div>
+                <div class="section-body">
+                    <div class="control-group">
+                        <label>Initial Speed <input type="number" class="value-input" id="val-speed" step="0.5" value="0.5"></label>
+                        <input type="range" id="in-speed" min="0.5" max="30" step="0.5" value="0.5">
+                    </div>
+                    <div class="control-group">
+                        <label>Drag <input type="number" class="value-input" id="val-drag" step="0.005" value="0.97"></label>
+                        <input type="range" id="in-drag" min="0.9" max="1.0" step="0.005" value="0.97">
+                    </div>
+                    <div class="control-group">
+                        <label>Turbulence <input type="number" class="value-input" id="val-turbulence" step="0.5" value="6.5"></label>
+                        <input type="range" id="in-turbulence" min="0" max="30" step="0.5" value="6.5">
+                    </div>
+                    <div class="control-group">
+                        <label>Velocity Randomness (%) <input type="number" class="value-input" id="val-velrand" step="1" value="50"></label>
+                        <input type="range" id="in-velrand" min="0" max="100" step="1" value="50">
+                    </div>
+                    <div class="control-group">
+                        <label>Wind X <input type="number" class="value-input" id="val-windx" step="0.5" value="-12"></label>
+                        <input type="range" id="in-windx" min="-20" max="20" step="0.5" value="-12">
+                    </div>
+                    <div class="control-group">
+                        <label>Wind Y <input type="number" class="value-input" id="val-windy" step="0.5" value="0"></label>
+                        <input type="range" id="in-windy" min="-20" max="20" step="0.5" value="0">
+                    </div>
+                    <div class="control-group">
+                        <label>Gravity <input type="number" class="value-input" id="val-gravity" step="0.5" value="0"></label>
+                        <input type="range" id="in-gravity" min="-20" max="20" step="0.5" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Appearance -->
+            <div class="section" data-section="appearance">
+                <div class="section-header">Appearance <span class="section-chevron">&#9660;</span></div>
+                <div class="section-body">
+                    <div class="control-group">
+                        <label>Particle Shape</label>
+                        <select id="sel-particle-shape">
+                            <option value="circle">Circle</option>
+                            <option value="square">Square</option>
+                            <option value="triangle">Triangle</option>
+                            <option value="star">Star</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Size <input type="number" class="value-input" id="val-size" step="1" value="4"></label>
+                        <input type="range" id="in-size" min="1" max="100" value="4">
+                    </div>
+                    <div class="control-group">
+                        <label>Size Over Lifetime</label>
+                        <select id="sel-size-lifetime">
+                            <option value="none">Default (fade in/out)</option>
+                            <option value="grow">Grow</option>
+                            <option value="shrink">Shrink</option>
+                            <option value="pulse">Pulse</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Particle Life (s) <input type="number" class="value-input" id="val-life" step="0.5" value="2"></label>
+                        <input type="range" id="in-life" min="0.5" max="10" step="0.5" value="2">
+                    </div>
+                    <div class="row">
+                        <div class="control-group">
+                            <label>Spin Min (&deg;/s) <input type="number" class="value-input" id="val-spinMin" step="10" value="0"></label>
+                            <input type="range" id="in-spinMin" min="-720" max="720" step="10" value="0">
+                        </div>
+                        <div class="control-group">
+                            <label>Spin Max <input type="number" class="value-input" id="val-spinMax" step="10" value="0"></label>
+                            <input type="range" id="in-spinMax" min="-720" max="720" step="10" value="0">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>Particle Colors</label>
+                        <div class="color-row" id="in-colors">
+                            <input type="color" value="#ffffff">
+                            <input type="color" value="#ffeb3b">
+                            <input type="color" value="#ffc107">
+                            <input type="color" value="#ffe082">
+                            <input type="color" value="#81d4fa">
+                            <input type="color" value="#e1bee7">
+                            <button class="color-btn" id="btn-add-color" title="Add color">+</button>
+                            <button class="color-btn" id="btn-remove-color" title="Remove color">&minus;</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Canvas / Animation -->
+            <div class="section" data-section="canvas">
+                <div class="section-header">Canvas &amp; Animation <span class="section-chevron">&#9660;</span></div>
+                <div class="section-body">
+                    <div class="control-group">
+                        <label>Canvas Size</label>
+                        <select id="sel-canvas">
+                            <option value="1920x1080">1920 x 1080 (HD Landscape)</option>
+                            <option value="1080x1920">1080 x 1920 (Portrait)</option>
+                            <option value="1080x1080">1080 x 1080 (Square)</option>
+                            <option value="3840x2160">3840 x 2160 (4K)</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                    <div class="row" id="custom-canvas-row" style="display:none;">
+                        <div class="control-group">
+                            <div class="inline-label">Width</div>
+                            <input type="number" class="value-input" id="val-canvasW" value="1920" style="width:100%">
+                        </div>
+                        <div class="control-group">
+                            <div class="inline-label">Height</div>
+                            <input type="number" class="value-input" id="val-canvasH" value="1080" style="width:100%">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>FPS</label>
+                        <div class="row">
+                            <button class="btn btn-secondary fps-btn" data-fps="24">24</button>
+                            <button class="btn btn-secondary fps-btn active" data-fps="30">30</button>
+                            <button class="btn btn-secondary fps-btn" data-fps="60">60</button>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>Duration (s) <input type="number" class="value-input" id="val-duration" step="1" value="8"></label>
+                        <input type="range" id="in-duration" min="1" max="60" step="1" value="8">
+                    </div>
+                    <div class="control-group">
+                        <label>Keyframe Sample Rate <input type="number" class="value-input" id="val-keyframeSample" step="1" value="3"></label>
+                        <input type="range" id="in-keyframeSample" min="1" max="10" step="1" value="3">
+                    </div>
+                    <div class="toggle-row">
+                        <span>Seamless Loop</span>
+                        <button class="toggle" id="tog-loop" data-key="loopingMode"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="actions">
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btn-generate">Generate</button>
+                <button class="btn btn-secondary" id="btn-download">Download</button>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-secondary btn-icon" id="btn-undo" title="Undo (Ctrl+Z)">&#8630;</button>
+                <button class="btn btn-secondary btn-icon" id="btn-redo" title="Redo (Ctrl+Shift+Z)">&#8631;</button>
+                <button class="btn btn-secondary" id="btn-randomize">Randomize</button>
+            </div>
+            <div class="notice">Download JSON &amp; import to After Effects via Bodymovin. Press <kbd style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:3px;font-size:11px;">?</kbd> for shortcuts.</div>
+        </div>
+    </div>
+
+    <!-- Preview area -->
+    <div id="preview-area">
+        <button class="icon-btn" id="btn-toggle-sidebar" title="Toggle sidebar">&#9776;</button>
+        <div class="top-controls">
+            <button class="icon-btn" id="btn-bg-toggle" title="Toggle background">&#9681;</button>
+        </div>
+        <div id="lottie-container" class="bg-dark">
+            <div id="lottie"></div>
+        </div>
+        <div id="playback-bar">
+            <button id="pb-prev" title="Previous frame">&lsaquo;</button>
+            <button id="pb-play" title="Play/Pause (Space)">&#9654;</button>
+            <button id="pb-next" title="Next frame">&rsaquo;</button>
+            <input type="range" id="scrubber" min="0" max="240" value="0" step="1">
+            <span id="frame-display">0 / 240</span>
+            <select id="speed-select">
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
+                <option value="1" selected>1x</option>
+                <option value="2">2x</option>
+            </select>
+        </div>
+    </div>
+
+    <script>
+        /* ═══════════════════════════════════════════════════
+           State
+           ═══════════════════════════════════════════════════ */
+        var currentAnim = null;
+        var currentLottieData = null;
+        var isPlaying = true;
+        var selectedFps = 30;
+
+        // Undo / redo (avoid naming collision with window.history)
+        var undoStack = [];
+        var undoIndex = -1;
+        var MAX_HISTORY = 50;
+
+        /* ═══════════════════════════════════════════════════
+           Slider ↔ number input binding
+           ═══════════════════════════════════════════════════ */
+        var sliderBinds = [
+            'particles', 'turbulence', 'speed', 'size', 'windx', 'windy',
+            'life', 'emit', 'velrand', 'sweepx', 'sweepy', 'duration', 'gravity',
+            'drag', 'spinMin', 'spinMax', 'keyframeSample'
+        ];
+
+        sliderBinds.forEach(function (id) {
+            var slider = document.getElementById('in-' + id);
+            var num = document.getElementById('val-' + id);
+            if (!slider || !num) return;
+            slider.addEventListener('input', function () { num.value = slider.value; });
+            num.addEventListener('input', function () { slider.value = num.value; });
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Toggle switches
+           ═══════════════════════════════════════════════════ */
+        document.querySelectorAll('.toggle').forEach(function (btn) {
+            btn.addEventListener('click', function () { btn.classList.toggle('on'); });
+        });
+
+        /* ═══════════════════════════════════════════════════
+           FPS buttons
+           ═══════════════════════════════════════════════════ */
+        document.querySelectorAll('.fps-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                document.querySelectorAll('.fps-btn').forEach(function (b) { b.classList.remove('active'); b.style.background = ''; b.style.borderColor = ''; });
+                btn.classList.add('active');
+                btn.style.background = 'var(--accent)';
+                btn.style.borderColor = 'var(--accent)';
+                selectedFps = parseInt(btn.dataset.fps);
+            });
+        });
+        // Style the default active button
+        (function () {
+            var active = document.querySelector('.fps-btn.active');
+            if (active) { active.style.background = 'var(--accent)'; active.style.borderColor = 'var(--accent)'; }
+        })();
+
+        /* ═══════════════════════════════════════════════════
+           Canvas size preset
+           ═══════════════════════════════════════════════════ */
+        document.getElementById('sel-canvas').addEventListener('change', function () {
+            var v = this.value;
+            var customRow = document.getElementById('custom-canvas-row');
+            if (v === 'custom') { customRow.style.display = 'flex'; return; }
+            customRow.style.display = 'none';
+            var parts = v.split('x');
+            document.getElementById('val-canvasW').value = parts[0];
+            document.getElementById('val-canvasH').value = parts[1];
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Emitter shape visibility
+           ═══════════════════════════════════════════════════ */
+        document.getElementById('sel-emitter-shape').addEventListener('change', function () {
+            var row = document.getElementById('emitter-size-row');
+            row.style.display = this.value === 'point' ? 'none' : 'flex';
+        });
+        document.getElementById('emitter-size-row').style.display = 'none'; // default point
+
+        /* ═══════════════════════════════════════════════════
+           Collapsible sections
+           ═══════════════════════════════════════════════════ */
+        document.querySelectorAll('.section-header').forEach(function (hdr) {
+            hdr.addEventListener('click', function () {
+                hdr.parentElement.classList.toggle('collapsed');
+            });
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Sidebar toggle
+           ═══════════════════════════════════════════════════ */
+        document.getElementById('btn-toggle-sidebar').addEventListener('click', function () {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Background toggle
+           ═══════════════════════════════════════════════════ */
+        var bgStates = ['bg-dark', 'bg-light', 'bg-checker'];
+        var bgIndex = 0;
+        document.getElementById('btn-bg-toggle').addEventListener('click', function () {
+            var container = document.getElementById('lottie-container');
+            container.classList.remove(bgStates[bgIndex]);
+            bgIndex = (bgIndex + 1) % bgStates.length;
+            container.classList.add(bgStates[bgIndex]);
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Dynamic colors
+           ═══════════════════════════════════════════════════ */
+        document.getElementById('btn-add-color').addEventListener('click', function () {
+            var container = document.getElementById('in-colors');
+            var inp = document.createElement('input');
+            inp.type = 'color';
+            inp.value = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0');
+            container.insertBefore(inp, document.getElementById('btn-add-color'));
+        });
+        document.getElementById('btn-remove-color').addEventListener('click', function () {
+            var swatches = document.querySelectorAll('#in-colors input[type="color"]');
+            if (swatches.length > 1) swatches[swatches.length - 1].remove();
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Config read / write
+           ═══════════════════════════════════════════════════ */
+        function hexToLottie(hex) {
+            return [
+                parseInt(hex.slice(1, 3), 16) / 255,
+                parseInt(hex.slice(3, 5), 16) / 255,
+                parseInt(hex.slice(5, 7), 16) / 255,
+                1
+            ];
+        }
+        function lottieToHex(c) {
+            return '#' +
+                Math.round(c[0] * 255).toString(16).padStart(2, '0') +
+                Math.round(c[1] * 255).toString(16).padStart(2, '0') +
+                Math.round(c[2] * 255).toString(16).padStart(2, '0');
+        }
+
+        function readConfig() {
+            var canvasSel = document.getElementById('sel-canvas').value;
+            var cw, ch;
+            if (canvasSel === 'custom') {
+                cw = parseInt(document.getElementById('val-canvasW').value) || 1920;
+                ch = parseInt(document.getElementById('val-canvasH').value) || 1080;
+            } else {
+                var parts = canvasSel.split('x');
+                cw = parseInt(parts[0]); ch = parseInt(parts[1]);
+            }
+            var colorInputs = document.querySelectorAll('#in-colors input[type="color"]');
+            var colors = Array.from(colorInputs).map(function (inp) { return hexToLottie(inp.value); });
+
+            return {
+                particles: parseFloat(document.getElementById('val-particles').value) || 400,
+                turbulence: parseFloat(document.getElementById('val-turbulence').value) || 0,
+                speed: parseFloat(document.getElementById('val-speed').value) || 0.5,
+                size: parseFloat(document.getElementById('val-size').value) || 4,
+                windx: parseFloat(document.getElementById('val-windx').value) || 0,
+                windy: parseFloat(document.getElementById('val-windy').value) || 0,
+                gravity: parseFloat(document.getElementById('val-gravity').value) || 0,
+                life: parseFloat(document.getElementById('val-life').value) || 2,
+                emit: parseFloat(document.getElementById('val-emit').value) || 0,
+                velrand: parseFloat(document.getElementById('val-velrand').value) || 0,
+                sweepx: parseFloat(document.getElementById('val-sweepx').value) || 0,
+                sweepy: parseFloat(document.getElementById('val-sweepy').value) || 0,
+                duration: parseFloat(document.getElementById('val-duration').value) || 8,
+                drag: parseFloat(document.getElementById('val-drag').value) || 0.97,
+                fps: selectedFps,
+                canvasWidth: cw,
+                canvasHeight: ch,
+                burstMode: document.getElementById('tog-burst').classList.contains('on'),
+                loopingMode: document.getElementById('tog-loop').classList.contains('on'),
+                emitterShape: document.getElementById('sel-emitter-shape').value,
+                emitterShapeWidth: parseFloat(document.getElementById('val-emitterShapeWidth').value) || 200,
+                emitterShapeHeight: parseFloat(document.getElementById('val-emitterShapeHeight').value) || 200,
+                particleShape: document.getElementById('sel-particle-shape').value,
+                sizeOverLifetime: document.getElementById('sel-size-lifetime').value,
+                spinMin: parseFloat(document.getElementById('val-spinMin').value) || 0,
+                spinMax: parseFloat(document.getElementById('val-spinMax').value) || 0,
+                keyframeSample: parseInt(document.getElementById('val-keyframeSample').value) || 3,
+                colors: colors
+            };
+        }
+
+        function applyConfig(cfg) {
+            sliderBinds.forEach(function (id) {
+                if (cfg[id] !== undefined) {
+                    var sl = document.getElementById('in-' + id);
+                    var nm = document.getElementById('val-' + id);
+                    if (sl) sl.value = cfg[id];
+                    if (nm) nm.value = cfg[id];
+                }
+            });
+            if (cfg.fps) {
+                selectedFps = cfg.fps;
+                document.querySelectorAll('.fps-btn').forEach(function (b) {
+                    var active = parseInt(b.dataset.fps) === cfg.fps;
+                    b.classList.toggle('active', active);
+                    b.style.background = active ? 'var(--accent)' : '';
+                    b.style.borderColor = active ? 'var(--accent)' : '';
+                });
+            }
+            if (cfg.canvasWidth && cfg.canvasHeight) {
+                var preset = cfg.canvasWidth + 'x' + cfg.canvasHeight;
+                var sel = document.getElementById('sel-canvas');
+                if (sel.querySelector('option[value="' + preset + '"]')) {
+                    sel.value = preset;
+                    document.getElementById('custom-canvas-row').style.display = 'none';
+                } else {
+                    sel.value = 'custom';
+                    document.getElementById('custom-canvas-row').style.display = 'flex';
+                    document.getElementById('val-canvasW').value = cfg.canvasWidth;
+                    document.getElementById('val-canvasH').value = cfg.canvasHeight;
+                }
+            }
+            if (cfg.burstMode !== undefined) document.getElementById('tog-burst').classList.toggle('on', cfg.burstMode);
+            if (cfg.loopingMode !== undefined) document.getElementById('tog-loop').classList.toggle('on', cfg.loopingMode);
+            if (cfg.emitterShape) {
+                document.getElementById('sel-emitter-shape').value = cfg.emitterShape;
+                document.getElementById('emitter-size-row').style.display = cfg.emitterShape === 'point' ? 'none' : 'flex';
+            }
+            if (cfg.emitterShapeWidth !== undefined) document.getElementById('val-emitterShapeWidth').value = cfg.emitterShapeWidth;
+            if (cfg.emitterShapeHeight !== undefined) document.getElementById('val-emitterShapeHeight').value = cfg.emitterShapeHeight;
+            if (cfg.particleShape) document.getElementById('sel-particle-shape').value = cfg.particleShape;
+            if (cfg.sizeOverLifetime) document.getElementById('sel-size-lifetime').value = cfg.sizeOverLifetime;
+
+            // Colors
+            if (cfg.colors && cfg.colors.length) {
+                var container = document.getElementById('in-colors');
+                var existing = container.querySelectorAll('input[type="color"]');
+                // Remove all existing color inputs
+                existing.forEach(function (el) { el.remove(); });
+                var addBtn = document.getElementById('btn-add-color');
+                cfg.colors.forEach(function (c) {
+                    var inp = document.createElement('input');
+                    inp.type = 'color';
+                    inp.value = (typeof c === 'string') ? c : lottieToHex(c);
+                    container.insertBefore(inp, addBtn);
+                });
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════
+           Presets
+           ═══════════════════════════════════════════════════ */
+        var defaultPresets = {
+            'Pixie Dust': {
+                particles: 400, turbulence: 6.5, speed: 0.5, size: 4, windx: -12, windy: 0,
+                life: 2, emit: 3, velrand: 50, sweepx: 100, sweepy: 0, duration: 8, gravity: 0, drag: 0.97,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: false, loopingMode: false,
+                emitterShape: 'point', particleShape: 'circle', sizeOverLifetime: 'none',
+                spinMin: 0, spinMax: 0, keyframeSample: 3,
+                colors: [[1,1,1,1],[1,0.92,0.23,1],[1,0.76,0.03,1],[1,0.88,0.51,1],[0.51,0.83,0.98,1],[0.88,0.75,0.91,1]]
+            },
+            'Firework Burst': {
+                particles: 600, turbulence: 2, speed: 15, size: 5, windx: 0, windy: 0,
+                life: 3, emit: 0.5, velrand: 80, sweepx: 0, sweepy: 0, duration: 6, gravity: 5, drag: 0.96,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: true, loopingMode: false,
+                emitterShape: 'point', particleShape: 'circle', sizeOverLifetime: 'shrink',
+                spinMin: 0, spinMax: 0, keyframeSample: 3,
+                colors: [[1,0.2,0.2,1],[1,0.6,0.1,1],[1,1,0.3,1],[0.2,1,0.2,1],[0.3,0.5,1,1]]
+            },
+            'Snowfall': {
+                particles: 300, turbulence: 3, speed: 1, size: 8, windx: -2, windy: 0,
+                life: 6, emit: 6, velrand: 30, sweepx: 800, sweepy: 0, duration: 10, gravity: 4, drag: 0.99,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: false, loopingMode: true,
+                emitterShape: 'line', emitterShapeWidth: 1920, emitterShapeHeight: 100,
+                particleShape: 'circle', sizeOverLifetime: 'none',
+                spinMin: 0, spinMax: 0, keyframeSample: 3,
+                colors: [[1,1,1,1],[0.9,0.95,1,1],[0.85,0.9,1,1]]
+            },
+            'Confetti': {
+                particles: 500, turbulence: 4, speed: 10, size: 14, windx: 0, windy: 0,
+                life: 4, emit: 1, velrand: 60, sweepx: 0, sweepy: 0, duration: 6, gravity: 8, drag: 0.97,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: true, loopingMode: false,
+                emitterShape: 'line', emitterShapeWidth: 600, emitterShapeHeight: 100,
+                particleShape: 'square', sizeOverLifetime: 'none',
+                spinMin: -360, spinMax: 360, keyframeSample: 3,
+                colors: [[1,0.2,0.3,1],[0.2,0.6,1,1],[1,0.85,0.1,1],[0.3,0.9,0.5,1],[0.8,0.3,0.9,1]]
+            },
+            'Fireflies': {
+                particles: 150, turbulence: 8, speed: 0.8, size: 6, windx: 0, windy: 0,
+                life: 5, emit: 5, velrand: 40, sweepx: 0, sweepy: 0, duration: 10, gravity: 0, drag: 0.99,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: false, loopingMode: true,
+                emitterShape: 'rectangle', emitterShapeWidth: 1400, emitterShapeHeight: 800,
+                particleShape: 'circle', sizeOverLifetime: 'pulse',
+                spinMin: 0, spinMax: 0, keyframeSample: 3,
+                colors: [[0.8,1,0.2,1],[0.6,1,0.1,1],[1,0.95,0.4,1]]
+            },
+            'Rain': {
+                particles: 500, turbulence: 0.5, speed: 2, size: 3, windx: -3, windy: 0,
+                life: 3, emit: 3, velrand: 20, sweepx: 0, sweepy: 0, duration: 6, gravity: 18, drag: 0.995,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: false, loopingMode: true,
+                emitterShape: 'line', emitterShapeWidth: 2200, emitterShapeHeight: 50,
+                particleShape: 'circle', sizeOverLifetime: 'none',
+                spinMin: 0, spinMax: 0, keyframeSample: 2,
+                colors: [[0.6,0.75,0.9,1],[0.5,0.65,0.85,1],[0.7,0.8,0.95,1]]
+            },
+            'Ember Glow': {
+                particles: 250, turbulence: 5, speed: 2, size: 7, windx: 1, windy: 0,
+                life: 4, emit: 4, velrand: 50, sweepx: 200, sweepy: 0, duration: 8, gravity: -3, drag: 0.97,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: false, loopingMode: true,
+                emitterShape: 'line', emitterShapeWidth: 600, emitterShapeHeight: 50,
+                particleShape: 'circle', sizeOverLifetime: 'shrink',
+                spinMin: 0, spinMax: 0, keyframeSample: 3,
+                colors: [[1,0.3,0.05,1],[1,0.5,0.1,1],[1,0.7,0.15,1],[1,0.85,0.3,1]]
+            },
+            'Bubbles': {
+                particles: 120, turbulence: 4, speed: 1.5, size: 30, windx: 0, windy: 0,
+                life: 6, emit: 6, velrand: 30, sweepx: 0, sweepy: 0, duration: 10, gravity: -2, drag: 0.99,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: false, loopingMode: true,
+                emitterShape: 'line', emitterShapeWidth: 1200, emitterShapeHeight: 100,
+                particleShape: 'circle', sizeOverLifetime: 'grow',
+                spinMin: 0, spinMax: 0, keyframeSample: 3,
+                colors: [[0.7,0.85,1,1],[0.8,0.9,1,1],[0.6,0.8,0.95,1],[1,1,1,1]]
+            },
+            'Galaxy Spin': {
+                particles: 400, turbulence: 3, speed: 4, size: 10, windx: 0, windy: 0,
+                life: 5, emit: 3, velrand: 60, sweepx: 0, sweepy: 0, duration: 10, gravity: 0, drag: 0.98,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: false, loopingMode: true,
+                emitterShape: 'circle', emitterShapeWidth: 300, emitterShapeHeight: 300,
+                particleShape: 'star', sizeOverLifetime: 'none',
+                spinMin: -180, spinMax: 180, keyframeSample: 3,
+                colors: [[0.9,0.7,1,1],[0.6,0.5,1,1],[0.4,0.7,1,1],[1,0.85,0.95,1],[1,1,1,1]]
+            },
+            'Ocean Spray': {
+                particles: 350, turbulence: 3, speed: 12, size: 6, windx: 2, windy: 0,
+                life: 2.5, emit: 1, velrand: 70, sweepx: 0, sweepy: 0, duration: 5, gravity: 10, drag: 0.96,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: true, loopingMode: false,
+                emitterShape: 'line', emitterShapeWidth: 200, emitterShapeHeight: 50,
+                particleShape: 'circle', sizeOverLifetime: 'shrink',
+                spinMin: 0, spinMax: 0, keyframeSample: 3,
+                colors: [[0.6,0.85,1,1],[0.8,0.95,1,1],[1,1,1,1],[0.5,0.75,0.9,1]]
+            },
+            'Northern Lights': {
+                particles: 200, turbulence: 12, speed: 0.3, size: 40, windx: -1, windy: 0,
+                life: 7, emit: 7, velrand: 20, sweepx: 600, sweepy: 0, duration: 12, gravity: -0.5, drag: 0.995,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: false, loopingMode: true,
+                emitterShape: 'line', emitterShapeWidth: 1600, emitterShapeHeight: 100,
+                particleShape: 'circle', sizeOverLifetime: 'pulse',
+                spinMin: 0, spinMax: 0, keyframeSample: 3,
+                colors: [[0.1,0.9,0.5,1],[0.2,0.7,0.9,1],[0.4,0.3,0.9,1],[0.1,0.95,0.8,1]]
+            },
+            'Sparkle Trail': {
+                particles: 600, turbulence: 2, speed: 0.3, size: 5, windx: -15, windy: 0,
+                life: 1.5, emit: 4, velrand: 40, sweepx: 300, sweepy: 0, duration: 6, gravity: 0, drag: 0.98,
+                fps: 30, canvasWidth: 1920, canvasHeight: 1080,
+                burstMode: false, loopingMode: false,
+                emitterShape: 'point', particleShape: 'star', sizeOverLifetime: 'shrink',
+                spinMin: -200, spinMax: 200, keyframeSample: 3,
+                colors: [[1,1,1,1],[1,0.95,0.7,1],[1,0.85,0.5,1]]
+            }
+        };
+
+        // Merge defaults with saved — defaults always present, user presets preserved
+        function getSavedPresets() {
+            var merged = JSON.parse(JSON.stringify(defaultPresets));
+            try {
+                var saved = JSON.parse(localStorage.getItem('lottieParticlePresetsV2'));
+                if (saved) {
+                    for (var name in saved) merged[name] = saved[name];
+                }
+            } catch (e) { /* ignore parse errors */ }
+            return merged;
+        }
+        // Only persist user-added/modified presets (those not identical to defaults)
+        function getUserPresets(allPresets) {
+            var userOnly = {};
+            for (var name in allPresets) {
+                if (!defaultPresets[name] || JSON.stringify(allPresets[name]) !== JSON.stringify(defaultPresets[name])) {
+                    userOnly[name] = allPresets[name];
+                }
+            }
+            return userOnly;
+        }
+        function savePresets(presets) {
+            localStorage.setItem('lottieParticlePresetsV2', JSON.stringify(getUserPresets(presets)));
+            updatePresetDropdown();
+        }
+        function updatePresetDropdown() {
+            var presets = getSavedPresets();
+            var sel = document.getElementById('sel-preset');
+            var cur = sel.value;
+            sel.innerHTML = '<option value="">-- Load Preset --</option>';
+
+            // Built-in presets first
+            var builtinGroup = document.createElement('optgroup');
+            builtinGroup.label = 'Built-in';
+            var userGroup = document.createElement('optgroup');
+            userGroup.label = 'Custom';
+            var hasUser = false;
+
+            for (var name in presets) {
+                var opt = document.createElement('option');
+                opt.value = name; opt.textContent = name;
+                if (defaultPresets[name] && JSON.stringify(presets[name]) === JSON.stringify(defaultPresets[name])) {
+                    builtinGroup.appendChild(opt);
+                } else {
+                    userGroup.appendChild(opt);
+                    hasUser = true;
+                }
+            }
+            sel.appendChild(builtinGroup);
+            if (hasUser) sel.appendChild(userGroup);
+            sel.value = cur;
+        }
+
+        document.getElementById('sel-preset').addEventListener('change', function () {
+            var name = this.value;
+            if (!name) return;
+            var presets = getSavedPresets();
+            if (presets[name]) { applyConfig(presets[name]); playLottie(); }
+        });
+
+        document.getElementById('btn-save-preset').addEventListener('click', function () {
+            var name = document.getElementById('in-preset-name').value.trim();
+            if (!name) return alert('Enter a preset name.');
+            var presets = getSavedPresets();
+            presets[name] = readConfig();
+            savePresets(presets);
+            document.getElementById('sel-preset').value = name;
+            document.getElementById('in-preset-name').value = '';
+        });
+
+        document.getElementById('btn-delete-preset').addEventListener('click', function () {
+            var name = document.getElementById('sel-preset').value;
+            if (!name) return alert('Select a preset to delete.');
+            if (defaultPresets[name]) return alert('Cannot delete built-in preset "' + name + '". You can override it by saving a preset with the same name.');
+            if (!confirm('Delete preset "' + name + '"?')) return;
+            var presets = getSavedPresets();
+            delete presets[name];
+            savePresets(presets);
+            document.getElementById('sel-preset').value = '';
+        });
+
+        // Export all presets as JSON file
+        document.getElementById('btn-export-presets').addEventListener('click', function () {
+            var presets = getSavedPresets();
+            var str = JSON.stringify(presets, null, 2);
+            var blob = new Blob([str], { type: 'application/json' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'particle_presets.json';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        });
+
+        // Import presets from JSON file
+        document.getElementById('btn-import-presets').addEventListener('click', function () {
+            document.getElementById('file-import-presets').click();
+        });
+        document.getElementById('file-import-presets').addEventListener('change', function (e) {
+            var file = e.target.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function (ev) {
+                try {
+                    var imported = JSON.parse(ev.target.result);
+                    if (typeof imported !== 'object' || Array.isArray(imported)) {
+                        alert('Invalid preset file. Expected a JSON object of named presets.');
+                        return;
+                    }
+                    var count = 0;
+                    var presets = getSavedPresets();
+                    for (var name in imported) {
+                        if (typeof imported[name] === 'object' && imported[name].particles !== undefined) {
+                            presets[name] = imported[name];
+                            count++;
+                        }
+                    }
+                    savePresets(presets);
+                    alert('Imported ' + count + ' preset(s) successfully.');
+                } catch (err) {
+                    alert('Failed to parse preset file: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+            // Reset so the same file can be imported again
+            this.value = '';
+        });
+
+        updatePresetDropdown();
+
+        /* ═══════════════════════════════════════════════════
+           Generation + playback
+           ═══════════════════════════════════════════════════ */
+        function showLoading(n) {
+            document.getElementById('loading-text').textContent = 'Generating ' + n + ' particles...';
+            document.getElementById('loading-overlay').classList.add('visible');
+        }
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.remove('visible');
+        }
+
+        function pushHistory(cfg) {
+            // Trim forward history on new action
+            undoStack = undoStack.slice(0, undoIndex + 1);
+            undoStack.push(JSON.parse(JSON.stringify(cfg)));
+            if (undoStack.length > MAX_HISTORY) undoStack.shift();
+            undoIndex = undoStack.length - 1;
+        }
+
+        function playLottie() {
+            var config = readConfig();
+            pushHistory(config);
+            showLoading(config.particles);
+
+            // Yield to let overlay paint
+            setTimeout(function () {
+                try {
+                    currentLottieData = ParticleEngine.buildLottieJSON(config);
+
+                    var container = document.getElementById('lottie');
+                    if (currentAnim) currentAnim.destroy();
+
+                    var totalFrames = currentLottieData.op;
+                    var scrubber = document.getElementById('scrubber');
+                    scrubber.max = totalFrames;
+                    scrubber.value = 0;
+                    document.getElementById('frame-display').textContent = '0 / ' + totalFrames;
+
+                    currentAnim = lottie.loadAnimation({
+                        container: container,
+                        renderer: 'svg',
+                        loop: true,
+                        autoplay: true,
+                        animationData: currentLottieData
+                    });
+                    isPlaying = true;
+                    document.getElementById('pb-play').innerHTML = '&#9646;&#9646;';
+
+                    currentAnim.addEventListener('enterFrame', function () {
+                        var f = Math.floor(currentAnim.currentFrame);
+                        scrubber.value = f;
+                        document.getElementById('frame-display').textContent = f + ' / ' + totalFrames;
+                    });
+                } catch (err) {
+                    console.error('Particle generation failed:', err);
+                    alert('Error: ' + err.message);
+                }
+                hideLoading();
+            }, 30);
+        }
+
+        document.getElementById('btn-generate').addEventListener('click', playLottie);
+
+        document.getElementById('btn-download').addEventListener('click', downloadJSON);
+        function downloadJSON() {
+            if (!currentLottieData) currentLottieData = ParticleEngine.buildLottieJSON(readConfig());
+            var str = JSON.stringify(currentLottieData);
+            var blob = new Blob([str], { type: 'application/json' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'particle_animation.json';
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+
+        /* ═══════════════════════════════════════════════════
+           Playback controls
+           ═══════════════════════════════════════════════════ */
+        document.getElementById('pb-play').addEventListener('click', togglePlay);
+        function togglePlay() {
+            if (!currentAnim) return;
+            if (isPlaying) { currentAnim.pause(); isPlaying = false; document.getElementById('pb-play').innerHTML = '&#9654;'; }
+            else { currentAnim.play(); isPlaying = true; document.getElementById('pb-play').innerHTML = '&#9646;&#9646;'; }
+        }
+
+        document.getElementById('pb-prev').addEventListener('click', function () { stepFrame(-1); });
+        document.getElementById('pb-next').addEventListener('click', function () { stepFrame(1); });
+        function stepFrame(delta) {
+            if (!currentAnim) return;
+            currentAnim.pause(); isPlaying = false;
+            document.getElementById('pb-play').innerHTML = '&#9654;';
+            var f = Math.floor(currentAnim.currentFrame) + delta;
+            if (f < 0) f = currentAnim.totalFrames - 1;
+            if (f >= currentAnim.totalFrames) f = 0;
+            currentAnim.goToAndStop(f, true);
+        }
+
+        document.getElementById('scrubber').addEventListener('input', function () {
+            if (!currentAnim) return;
+            currentAnim.goToAndStop(parseInt(this.value), true);
+            isPlaying = false;
+            document.getElementById('pb-play').innerHTML = '&#9654;';
+        });
+
+        document.getElementById('speed-select').addEventListener('change', function () {
+            if (currentAnim) currentAnim.setSpeed(parseFloat(this.value));
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Undo / Redo
+           ═══════════════════════════════════════════════════ */
+        document.getElementById('btn-undo').addEventListener('click', undo);
+        document.getElementById('btn-redo').addEventListener('click', redo);
+
+        function undo() {
+            if (undoIndex <= 0) return;
+            undoIndex--;
+            applyConfig(undoStack[undoIndex]);
+            regenerateWithoutHistory();
+        }
+        function redo() {
+            if (undoIndex >= undoStack.length - 1) return;
+            undoIndex++;
+            applyConfig(undoStack[undoIndex]);
+            regenerateWithoutHistory();
+        }
+        function regenerateWithoutHistory() {
+            var config = readConfig();
+            showLoading(config.particles);
+            setTimeout(function () {
+                try {
+                    currentLottieData = ParticleEngine.buildLottieJSON(config);
+                    var container = document.getElementById('lottie');
+                    if (currentAnim) currentAnim.destroy();
+                    var totalFrames = currentLottieData.op;
+                    var scrubber = document.getElementById('scrubber');
+                    scrubber.max = totalFrames; scrubber.value = 0;
+                    document.getElementById('frame-display').textContent = '0 / ' + totalFrames;
+                    currentAnim = lottie.loadAnimation({ container: container, renderer: 'svg', loop: true, autoplay: true, animationData: currentLottieData });
+                    isPlaying = true; document.getElementById('pb-play').innerHTML = '&#9646;&#9646;';
+                    currentAnim.addEventListener('enterFrame', function () {
+                        var f = Math.floor(currentAnim.currentFrame);
+                        scrubber.value = f;
+                        document.getElementById('frame-display').textContent = f + ' / ' + totalFrames;
+                    });
+                } catch (err) {
+                    console.error('Regeneration failed:', err);
+                }
+                hideLoading();
+            }, 30);
+        }
+
+        /* ═══════════════════════════════════════════════════
+           Randomize
+           ═══════════════════════════════════════════════════ */
+        document.getElementById('btn-randomize').addEventListener('click', function () {
+            function rand(min, max, step) {
+                step = step || 1;
+                var steps = Math.floor((max - min) / step);
+                return min + Math.floor(Math.random() * (steps + 1)) * step;
+            }
+
+            applyConfig({
+                particles: rand(50, 800),
+                turbulence: rand(0, 20, 0.5),
+                speed: rand(0.5, 20, 0.5),
+                size: rand(2, 50),
+                windx: rand(-15, 15, 0.5),
+                windy: rand(-10, 10, 0.5),
+                gravity: rand(-10, 10, 0.5),
+                life: rand(1, 6, 0.5),
+                emit: rand(0.5, 5, 0.5),
+                velrand: rand(0, 100),
+                sweepx: rand(-500, 500, 10),
+                sweepy: rand(-500, 500, 10),
+                duration: rand(4, 15),
+                drag: rand(0.92, 1.0, 0.005),
+                fps: [24, 30, 60][Math.floor(Math.random() * 3)],
+                burstMode: Math.random() > 0.7,
+                loopingMode: Math.random() > 0.8,
+                emitterShape: ['point', 'line', 'circle', 'rectangle'][Math.floor(Math.random() * 4)],
+                emitterShapeWidth: rand(50, 600, 10),
+                emitterShapeHeight: rand(50, 400, 10),
+                particleShape: ['circle', 'square', 'triangle', 'star'][Math.floor(Math.random() * 4)],
+                sizeOverLifetime: ['none', 'grow', 'shrink', 'pulse'][Math.floor(Math.random() * 4)],
+                spinMin: rand(-360, 0, 10),
+                spinMax: rand(0, 360, 10),
+                keyframeSample: rand(1, 6),
+                colors: (function () {
+                    var n = 3 + Math.floor(Math.random() * 5);
+                    var arr = [];
+                    for (var i = 0; i < n; i++) {
+                        arr.push([Math.random(), Math.random(), Math.random(), 1]);
+                    }
+                    return arr;
+                })()
+            });
+
+            playLottie();
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Keyboard shortcuts
+           ═══════════════════════════════════════════════════ */
+        document.addEventListener('keydown', function (e) {
+            var tag = document.activeElement && document.activeElement.tagName;
+            var inInput = (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA');
+
+            // Shortcuts overlay
+            if (e.key === '?' && !inInput) {
+                document.getElementById('shortcut-overlay').classList.toggle('visible');
+                e.preventDefault();
+                return;
+            }
+            // Close overlay on Escape
+            if (e.key === 'Escape') {
+                document.getElementById('shortcut-overlay').classList.remove('visible');
+                return;
+            }
+
+            // Don't fire most shortcuts when typing
+            if (inInput && !e.metaKey && !e.ctrlKey) return;
+
+            var mod = e.metaKey || e.ctrlKey;
+
+            if (e.key === ' ' && !inInput) { e.preventDefault(); togglePlay(); }
+            else if (e.key === 'Enter' && !inInput) { e.preventDefault(); playLottie(); }
+            else if (mod && e.key === 's') { e.preventDefault(); downloadJSON(); }
+            else if (mod && e.shiftKey && e.key === 'z') { e.preventDefault(); redo(); }
+            else if (mod && e.key === 'z') { e.preventDefault(); undo(); }
+            else if (e.key === '[' && !inInput) { stepFrame(-1); }
+            else if (e.key === ']' && !inInput) { stepFrame(1); }
+        });
+
+        /* ═══════════════════════════════════════════════════
+           Init
+           ═══════════════════════════════════════════════════ */
+        window.onload = function () {
+            playLottie();
+        };
+    </script>
+</body>
+
+</html>
